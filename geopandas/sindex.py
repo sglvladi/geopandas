@@ -1,3 +1,4 @@
+import os.path
 import warnings
 
 from shapely.geometry.base import BaseGeometry
@@ -404,21 +405,33 @@ if compat.HAS_RTREE:
             Geometries from which to build the spatial index.
         """
 
-        def __init__(self, geometry):
-            stream = (
-                (i, item.bounds, None)
-                for i, item in enumerate(geometry)
-                if pd.notnull(item) and not item.is_empty
-            )
-            try:
-                super().__init__(stream)
-            except RTreeError:
-                # What we really want here is an empty generator error, or
-                # for the bulk loader to log that the generator was empty
-                # and move on.
-                # See https://github.com/Toblerity/rtree/issues/20.
-                super().__init__()
+        def __init__(self, geometry, filename=None):
+            load = False
+            if filename is not None and os.path.exists(filename):
+                load = True
 
+            if not load:
+                stream = (
+                    (i, item.bounds, None)
+                    for i, item in enumerate(geometry)
+                    if pd.notnull(item) and not item.is_empty
+                )
+                try:
+                    if filename is not None:
+                        super().__init__(filename, stream)
+                    else:
+                        super().__init__(stream)
+                except RTreeError:
+                    # What we really want here is an empty generator error, or
+                    # for the bulk loader to log that the generator was empty
+                    # and move on.
+                    # See https://github.com/Toblerity/rtree/issues/20.
+                    if filename is not None:
+                        super().__init__(filename)
+                    else:
+                        super().__init__()
+            else:
+                super().__init__(filename)
             # store reference to geometries for predicate queries
             self.geometries = geometry
             # create a prepared geometry cache
